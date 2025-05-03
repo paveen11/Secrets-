@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Abyss Confessional</title>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Text&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: #000;
+      color: #ff3333;
+      font-family: 'Crimson Text', serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    #container {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 600px;
+      width: 90%;
+    }
+    input, textarea, button {
+      background: #222;
+      color: #ff3333;
+      border: 1px solid #ff3333;
+      padding: 10px;
+      width: 100%;
+      margin: 10px 0;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    textarea {
+      resize: none;
+      height: 100px;
+    }
+    #share-section {
+      display: none;
+      margin: 20px 0;
+    }
+    #feed {
+      max-width: 600px;
+      width: 90%;
+      margin: 20px auto;
+    }
+    .secret {
+      background: #111;
+      padding: 15px;
+      margin: 20px 0;
+      border: 1px solid #ff3333;
+      animation: flicker 3s infinite;
+    }
+    .secret p {
+      margin: 0 0 10px;
+    }
+    .comments {
+      margin-top: 10px;
+      text-align: left;
+    }
+    .comment {
+      background: #222;
+      padding: 5px;
+      margin: 5px 0;
+      font-size: 14px;
+    }
+    #counter {
+      font-size: 24px;
+      color: #ff6666;
+      margin: 20px 0;
+    }
+    @keyframes flicker {
+      0% { opacity: 1; }
+      50% { opacity: 0.8; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>The Abyss Confessional</h1>
+    <p>Reveal your darkest secret. The Abyss binds your truth.</p>
+    <input type="text" id="username" placeholder="Your Username">
+    <textarea id="secret" placeholder="Your darkest secret (max 280 chars)" maxlength="280"></textarea>
+    <button onclick="submitSecret()">Confess</button>
+    <div id="share-section">
+      <p>Share your secret to join the Abyss:</p>
+      <button onclick="shareSecret()">Share Your Secret</button>
+    </div>
+  </div>
+  <div id="counter">0 secrets confessed</div>
+  <div id="feed"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <script>
+    // Firebase Config (Using your latest config)
+    const firebaseConfig = {
+      apiKey: "AIzaSyBUic7YpUPVLODA-eIf6363vwAuszGMkPA",
+      authDomain: "secrets-acb6f.firebaseapp.com",
+      databaseURL: "https://secrets-acb6f-default-rtdb.firebaseio.com",
+      projectId: "secrets-acb6f",
+      storageBucket: "secrets-acb6f.firebasestorage.app",
+      messagingSenderId: "679638927149",
+      appId: "1:679638927149:web:a55dd4d980fdaa172f75a4",
+      measurementId: "G-HNJRBQX8ZW"
+    };
+
+    // Initialize Firebase
+    try {
+      firebase.initializeApp(firebaseConfig);
+      console.log('Firebase initialized successfully');
+    } catch (error) {
+      console.error('Firebase init error:', error.message);
+      alert('Failed to connect to Firebase: ' + error.message);
+    }
+    const db = firebase.database();
+
+    let currentSecretId = null;
+
+    // Submit Secret
+    function submitSecret() {
+      console.log('Confess button clicked');
+      let username = document.getElementById('username').value.trim();
+      let secret = document.getElementById('secret').value.trim();
+      if (!username || !secret) {
+        alert('Please enter both a username and a secret.');
+        return;
+      }
+      try {
+        let secretRef = db.ref('secrets').push({
+          username: username,
+          text: secret,
+          timestamp: Date.now()
+        });
+        currentSecretId = secretRef.key;
+        console.log('Secret submitted, ID:', currentSecretId);
+        document.getElementById('share-section').style.display = 'block';
+        document.getElementById('username').value = '';
+        document.getElementById('secret').value = '';
+      } catch (error) {
+        console.error('Submit error:', error.message);
+        alert('Failed to submit secret: ' + error.message);
+      }
+    }
+
+    // Share Secret
+    function shareSecret() {
+      if (currentSecretId) {
+        let url = `abyssconfess.io/secret?id=${currentSecretId}`;
+        console.log('Sharing secret:', url);
+        alert(`Share this: ${url}`); // Replace with AddThis/ShareThis
+        document.getElementById('share-section').style.display = 'none';
+      } else {
+        alert('No secret to share.');
+      }
+    }
+
+    // Display Secrets
+    db.ref('secrets').on('value', (snapshot) => {
+      console.log('Fetching secrets');
+      let feed = document.getElementById('feed');
+      feed.innerHTML = '';
+      let count = 0;
+      snapshot.forEach((child) => {
+        let data = child.val();
+        let id = child.key;
+        let div = document.createElement('div');
+        div.className = 'secret';
+        div.innerHTML = `
+          <p><strong>${data.username}</strong>: ${data.text}</p>
+          <div class="comments">
+            <input type="text" id="comment-${id}" placeholder="Add a comment">
+            <button onclick="addComment('${id}')">Comment</button>
+            <div id="comments-${id}"></div>
+          </div>`;
+        feed.prepend(div);
+        loadComments(id);
+        count++;
+      });
+      document.getElementById('counter').innerText = `${count} secrets confessed`;
+    }, (error) => {
+      console.error('Feed error:', error.message);
+    });
+
+    // Add Comment
+    function addComment(secretId) {
+      console.log('Adding comment for secret:', secretId);
+      let commentInput = document.getElementById(`comment-${secretId}`);
+      let comment = commentInput.value.trim();
+      if (comment) {
+        try {
+          db.ref(`comments/${secretId}`).push({
+            text: comment,
+            timestamp: Date.now()
+          });
+          commentInput.value = '';
+          console.log('Comment added');
+        } catch (error) {
+          console.error('Comment error:', error.message);
+          alert('Failed to add comment: ' + error.message);
+        }
+      }
+    }
+
+    // Load Comments
+    function loadComments(secretId) {
+      db.ref(`comments/${secretId}`).on('value', (snapshot) => {
+        let commentsDiv = document.getElementById(`comments-${secretId}`);
+        commentsDiv.innerHTML = '';
+        snapshot.forEach((child) => {
+          let comment = child.val().text;
+          let div = document.createElement('div');
+          div.className = 'comment';
+          div.innerText = comment;
+          commentsDiv.appendChild(div);
+        });
+      }, (error) => {
+        console.error('Comments load error:', error.message);
+      });
+    }
+
+    // Audio
+    let audio = new Audio('https://freesound.org/data/previews/120/120374_2154985-lq.mp3'); // Replace with chant
+    audio.loop = true;
+    audio.play().catch((error) => {
+      console.error('Audio error:', error.message);
+    });
+  </script>
+</body>
+</html>
